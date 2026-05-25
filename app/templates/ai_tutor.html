@@ -1,0 +1,393 @@
+{% extends "base.html" %}
+
+{% block title %}AI Тренажер{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <h1 class="text-center mb-4">🤖 AI Тренажер собеседования</h1>
+
+            <!-- Карточка выбора темы и сложности -->
+            <div class="card" id="startCard">
+                <div class="card-body">
+                    <h5 class="card-title">Выберите тему и сложность</h5>
+                    <form id="startForm">
+                        <div class="mb-3">
+                            <label class="form-label">Тема</label>
+                            <select class="form-control" id="topic">
+                                <option value="requirements">📋 Требования</option>
+                                <option value="architecture">🏗️ Архитектура</option>
+                                <option value="databases">🗄️ Базы данных</option>
+                                <option value="integration">🔗 Интеграции</option>
+                                <option value="security">🔒 Безопасность</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Сложность</label>
+                            <select class="form-control" id="difficulty">
+                                <option value="junior">🌱 Junior (0-2 года)</option>
+                                <option value="middle" selected>📘 Middle (3-5 лет)</option>
+                                <option value="senior">🚀 Senior (5+ лет)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-play"></i> Начать тренировку
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Область активной сессии (скрыта по умолчанию) -->
+            <div id="sessionArea" style="display: none;" class="mt-4">
+                <!-- Прогресс-бар -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small>Прогресс</small>
+                        <small id="progressPercent">0%</small>
+                    </div>
+                    <div class="progress">
+                        <div id="progressBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Карточка вопроса -->
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-question-circle"></i>
+                            Вопрос <span id="questionCount">1</span>/<span id="totalQuestions">5</span>
+                            <span id="topicBadge" class="badge bg-light text-dark ms-2"></span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <h4 id="questionText" class="mb-4"></h4>
+                        <textarea id="answerText" class="form-control" rows="6"
+                                  placeholder="Введите ваш ответ... Используйте STAR метод для лучшего результата:&#10;&#10;S - Situation (Ситуация)&#10;T - Task (Задача)&#10;A - Action (Действие)&#10;R - Result (Результат)"></textarea>
+                        <button onclick="submitAnswer()" class="btn btn-success mt-3 w-100">
+                            <i class="fas fa-paper-plane"></i> Отправить ответ
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Область обратной связи (скрыта по умолчанию) -->
+                <div id="feedbackArea" style="display: none;" class="card mt-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Анализ ответа</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Общий балл -->
+                        <div class="text-center mb-3">
+                            <div class="display-4 fw-bold" id="overallScore">0</div>
+                            <div class="progress" style="height: 10px;">
+                                <div id="scoreProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <small class="text-muted">Общий балл (0-100)</small>
+                        </div>
+
+                        <!-- Оценки по критериям -->
+                        <div id="scoresContainer" class="mb-3"></div>
+
+                        <!-- Сильные стороны -->
+                        <div id="strengthsContainer" class="mb-3"></div>
+
+                        <!-- Улучшения -->
+                        <div id="improvementsContainer" class="mb-3"></div>
+
+                        <!-- Чего не хватает -->
+                        <div id="missingContainer" class="mb-3"></div>
+
+                        <!-- Улучшенный ответ -->
+                        <div id="improvedContainer" class="mb-3"></div>
+
+                        <!-- Кнопка следующего вопроса -->
+                        <div id="nextButton" style="display: none;">
+                            <button onclick="loadNextQuestion()" class="btn btn-primary w-100">
+                                <i class="fas fa-arrow-right"></i> Следующий вопрос
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Область завершения сессии (скрыта по умолчанию) -->
+            <div id="sessionComplete" style="display: none;" class="card mt-4 text-center">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-trophy"></i> Сессия завершена!</h5>
+                </div>
+                <div class="card-body">
+                    <div class="display-1 mb-3">🎉</div>
+                    <h4>Отличная работа!</h4>
+                    <p id="finalScore" class="lead"></p>
+                    <p>Вы ответили на все вопросы. Продолжайте практиковаться, чтобы улучшить свои навыки!</p>
+                    <div class="mt-3">
+                        <button onclick="location.reload()" class="btn btn-primary me-2">
+                            <i class="fas fa-redo"></i> Новая тренировка
+                        </button>
+                        <a href="/knowledge-map" class="btn btn-outline-info">
+                            <i class="fas fa-brain"></i> Посмотреть карту знаний
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let sessionId = null;
+let currentQuestion = 1;
+let totalQuestions = 5;
+let sessionScores = [];
+
+// Обработчик формы начала тренировки
+document.getElementById('startForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const topic = document.getElementById('topic').value;
+    const difficulty = document.getElementById('difficulty').value;
+    const topicNames = {
+        'requirements': 'Требования',
+        'architecture': 'Архитектура',
+        'databases': 'Базы данных',
+        'integration': 'Интеграции',
+        'security': 'Безопасность'
+    };
+
+    try {
+        const response = await fetch('/api/ai-tutor/start-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ topic, difficulty })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            sessionId = data.session_id;
+            document.getElementById('questionText').innerText = data.question;
+            document.getElementById('topicBadge').innerHTML = topicNames[topic] + ' | ' + getDifficultyName(difficulty);
+            document.getElementById('sessionArea').style.display = 'block';
+            document.getElementById('startCard').style.display = 'none';
+            document.getElementById('questionCount').innerText = '1';
+            document.getElementById('totalQuestions').innerText = totalQuestions;
+            updateProgress();
+        } else if (response.status === 401) {
+            window.location.href = '/login';
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.detail || 'Не удалось начать сессию'));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+});
+
+function getDifficultyName(difficulty) {
+    const names = {
+        'junior': 'Junior',
+        'middle': 'Middle',
+        'senior': 'Senior'
+    };
+    return names[difficulty] || difficulty;
+}
+
+function updateProgress() {
+    const percent = (currentQuestion - 1) / totalQuestions * 100;
+    document.getElementById('progressBar').style.width = percent + '%';
+    document.getElementById('progressPercent').innerText = Math.round(percent) + '%';
+}
+
+// Отправка ответа
+async function submitAnswer() {
+    const answer = document.getElementById('answerText').value;
+
+    if (!answer.trim()) {
+        alert('Введите ответ');
+        return;
+    }
+
+    // Показываем индикатор загрузки
+    const submitBtn = document.querySelector('#sessionArea .btn-success');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Анализируем...';
+    submitBtn.disabled = true;
+
+    try {
+        const response = await fetch('/api/ai-tutor/analyze-answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ session_id: sessionId, answer: answer })
+        });
+
+        if (response.ok) {
+            const analysis = await response.json();
+            sessionScores.push(analysis.overall_score);
+            showFeedback(analysis);
+            document.getElementById('answerText').disabled = true;
+            document.getElementById('nextButton').style.display = 'block';
+        } else if (response.status === 401) {
+            window.location.href = '/login';
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.detail || 'Не удалось проанализировать ответ'));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
+// Отображение обратной связи
+function showFeedback(analysis) {
+    const feedbackArea = document.getElementById('feedbackArea');
+    const overallScore = document.getElementById('overallScore');
+    const scoreProgress = document.getElementById('scoreProgress');
+
+    feedbackArea.style.display = 'block';
+    overallScore.innerText = analysis.overall_score;
+    scoreProgress.style.width = `${analysis.overall_score}%`;
+    scoreProgress.setAttribute('aria-valuenow', analysis.overall_score);
+
+    // Оценки по критериям
+    const scoresContainer = document.getElementById('scoresContainer');
+    const scoreLabels = {
+        'structure': 'Структура ответа',
+        'technical_accuracy': 'Техническая точность',
+        'practical_examples': 'Практические примеры',
+        'star_method': 'STAR метод',
+        'communication': 'Коммуникация'
+    };
+
+    let scoresHtml = '<div class="row">';
+    for (const [key, value] of Object.entries(analysis.scores)) {
+        const label = scoreLabels[key] || key;
+        let colorClass = 'bg-danger';
+        if (value >= 7) colorClass = 'bg-success';
+        else if (value >= 4) colorClass = 'bg-warning';
+
+        scoresHtml += `
+            <div class="col-md-4 mb-2">
+                <small>${label}</small>
+                <div class="d-flex align-items-center">
+                    <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                        <div class="progress-bar ${colorClass}" style="width: ${value*10}%"></div>
+                    </div>
+                    <span class="small fw-bold">${value}/10</span>
+                </div>
+            </div>
+        `;
+    }
+    scoresHtml += '</div>';
+    scoresContainer.innerHTML = scoresHtml;
+
+    // Сильные стороны
+    const strengthsContainer = document.getElementById('strengthsContainer');
+    if (analysis.strengths && analysis.strengths.length > 0) {
+        strengthsContainer.innerHTML = `
+            <div class="alert alert-success">
+                <strong><i class="fas fa-check-circle"></i> Что хорошо:</strong>
+                <ul class="mb-0 mt-2">${analysis.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>
+            </div>
+        `;
+    } else {
+        strengthsContainer.innerHTML = '';
+    }
+
+    // Улучшения
+    const improvementsContainer = document.getElementById('improvementsContainer');
+    if (analysis.improvements && analysis.improvements.length > 0) {
+        improvementsContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <strong><i class="fas fa-exclamation-triangle"></i> Что улучшить:</strong>
+                <ul class="mb-0 mt-2">${analysis.improvements.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+            </div>
+        `;
+    } else {
+        improvementsContainer.innerHTML = '';
+    }
+
+    // Чего не хватает
+    const missingContainer = document.getElementById('missingContainer');
+    if (analysis.missing_points && analysis.missing_points.length > 0) {
+        missingContainer.innerHTML = `
+            <div class="alert alert-info">
+                <strong><i class="fas fa-lightbulb"></i> Чего не хватает:</strong>
+                <ul class="mb-0 mt-2">${analysis.missing_points.map(m => `<li>${escapeHtml(m)}</li>`).join('')}</ul>
+            </div>
+        `;
+    } else {
+        missingContainer.innerHTML = '';
+    }
+
+    // Улучшенный ответ
+    const improvedContainer = document.getElementById('improvedContainer');
+    if (analysis.improved_answer) {
+        improvedContainer.innerHTML = `
+            <div class="alert alert-secondary">
+                <strong><i class="fas fa-star"></i> Рекомендация:</strong>
+                <div class="mt-2 p-2 bg-light rounded">${escapeHtml(analysis.improved_answer)}</div>
+            </div>
+        `;
+    } else {
+        improvedContainer.innerHTML = '';
+    }
+
+    // Прокрутка к обратной связи
+    feedbackArea.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Загрузка следующего вопроса
+async function loadNextQuestion() {
+    currentQuestion++;
+    updateProgress();
+
+    if (currentQuestion > totalQuestions) {
+        // Сессия завершена
+        const avgScore = sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length;
+        document.getElementById('finalScore').innerHTML = `
+            <strong class="display-6">${Math.round(avgScore)}%</strong><br>
+            <small>Средний балл по ${sessionScores.length} вопросам</small>
+        `;
+        document.getElementById('sessionArea').style.display = 'none';
+        document.getElementById('sessionComplete').style.display = 'block';
+        return;
+    }
+
+    // Получаем следующий вопрос от сервера
+    try {
+        const response = await fetch(`/api/ai-tutor/next-question/${sessionId}`, {
+            method: 'GET',
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('questionCount').innerText = currentQuestion;
+            document.getElementById('questionText').innerText = data.question;
+            document.getElementById('answerText').value = '';
+            document.getElementById('answerText').disabled = false;
+            document.getElementById('feedbackArea').style.display = 'none';
+            document.getElementById('nextButton').style.display = 'none';
+            document.getElementById('answerText').focus();
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.detail || 'Не удалось загрузить следующий вопрос'));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+// Экранирование HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

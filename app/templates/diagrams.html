@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block title %}Диаграммы{% endblock %}
+
+{% block extra_css %}
+<style>
+    .diagram-card {
+        transition: transform 0.2s;
+        margin-bottom: 20px;
+    }
+    .diagram-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .mermaid-preview {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+        min-height: 200px;
+    }
+    pre {
+        background: #f4f4f4;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        max-height: 200px;
+        overflow: auto;
+    }
+    .diagram-type-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>📊 Диаграммы</h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#diagramModal" onclick="resetDiagramForm()">
+        <i class="fas fa-plus"></i> Создать диаграмму
+    </button>
+</div>
+
+<div id="diagramsList" class="row">
+    <div class="col-12 text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+    </div>
+</div>
+
+<!-- Modal для создания/редактирования диаграммы -->
+<div class="modal fade" id="diagramModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Создать диаграмму</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="diagramForm">
+                    <input type="hidden" id="diagramId">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Название *</label>
+                                <input type="text" class="form-control" id="title" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="diagramType" class="form-label">Тип диаграммы *</label>
+                                <select class="form-control" id="diagramType" required>
+                                    <option value="mermaid">Mermaid</option>
+                                    <option value="plantuml">PlantUML</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Код диаграммы *</label>
+                        <textarea class="form-control font-monospace" id="content" rows="15" placeholder="Пример для Mermaid:
+sequenceDiagram
+    Alice->>John: Hello John, how are you?
+    John-->>Alice: Great!
+    Alice->>John: See you later!" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Предпросмотр</label>
+                        <div id="preview" class="mermaid-preview border">
+                            <p class="text-muted">Введите код диаграммы для предпросмотра</p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveDiagram()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal для просмотра диаграммы -->
+<div class="modal fade" id="viewDiagramModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewTitle">Просмотр диаграммы</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="viewDescription" class="text-muted"></p>
+                <div id="viewContent" class="mermaid-preview bg-light p-3 rounded"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFilter = 'all';
+
+// Инициализация Mermaid
+mermaid.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    securityLevel: 'loose',
+    flowchart: { useMaxWidth: true }
+});
+
+// Предпросмотр при вводе кода
+document.getElementById('content')?.addEventListener('input', function() {
+    previewDiagram();
+});
+
+async function previewDiagram() {
+    const content = document.getElementById('content').value;
+    const previewDiv = document.getElementById('preview');
+
+    if (!content.trim()) {
+        previewDiv.innerHTML = '<p class="text-muted">Введите код диаграммы для предпросмотра</p>';
+        return;
+    }
+
+    try {
+        const id = 'preview-' + Date.now();
+        previewDiv.innerHTML = `<pre class="mermaid" id="${id}">${escapeHtml(content)}</pre>`;
+        await mermaid.run({
+            nodes: document.querySelectorAll('.mermaid'),
+            suppressErrors: true
+        });
+    } catch (error) {
+        previewDiv.innerHTML = `<div class="alert alert-danger">Ошибка рендеринга: ${error.message}</div>`;
+    }
+}
+
+async function loadDiagrams() {
+    try {
+        const response = await fetch('/api/diagrams/', {
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const diagrams = await response.json();
+            displayDiagrams(diagrams);
+        } else if (response.status === 401) {
+            window.location.href = '/login';
+        } else {
+            console.error('Failed to load diagrams:', response.status);
+        }
+    } catch (error) {
+        console.error('Error loading diagrams:', error);
+        document.getElementById('diagramsList').innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-danger">
+                    Ошибка загрузки диаграмм: ${error.message}
+                </div>
+            </div>
+        `;
+    }
+}
+
+function displayDiagrams(diagrams) {
+    const container = document.getElementById('diagramsList');
+
+    if (!diagrams || diagrams.length === 0) {
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> У вас пока нет диаграмм.
+                    Создайте первую с помощью кнопки выше!
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = diagrams.map(diagram => `
+        <div class="col-md-6 col-lg-4">
+            <div class="card diagram-card h-100">
+                <div class="card-body">
+                    <span class="badge bg-primary diagram-type-badge">${escapeHtml(diagram.diagram_type)}</span>
+                    <h5 class="card-title mt-3">${escapeHtml(diagram.title)}</h5>
+                    ${diagram.description ? `<p class="card-text small">${escapeHtml(diagram.description)}</p>` : ''}
+                    <div class="mermaid-preview">
+                        <pre class="mermaid" id="preview-${diagram.id}">${escapeHtml(diagram.content)}</pre>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-calendar"></i> ${formatDate(diagram.created_at)}
+                        </small>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="btn-group w-100" role="group">
+                        <button class="btn btn-sm btn-info" onclick="viewDiagram(${diagram.id})">
+                            <i class="fas fa-eye"></i> Просмотр
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDiagram(${diagram.id})">
+                            <i class="fas fa-trash"></i> Удалить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    // Рендерим все диаграммы
+    setTimeout(() => {
+        mermaid.run({
+            querySelector: '.mermaid',
+            suppressErrors: true
+        }).catch(err => console.error('Mermaid error:', err));
+    }, 100);
+}
+
+async function saveDiagram() {
+    const id = document.getElementById('diagramId').value;
+    const title = document.getElementById('title').value;
+    const diagramType = document.getElementById('diagramType').value;
+    const content = document.getElementById('content').value;
+    const description = document.getElementById('description').value;
+
+    if (!title || !content) {
+        showMessage('Пожалуйста, заполните название и код диаграммы', 'warning');
+        return;
+    }
+
+    const data = {
+        title: title,
+        diagram_type: diagramType,
+        content: content,
+        description: description
+    };
+
+    const url = id ? `/api/diagrams/${id}` : '/api/diagrams/';
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('diagramModal')).hide();
+            resetDiagramForm();
+            loadDiagrams();
+            showMessage('Диаграмма успешно сохранена!', 'success');
+        } else {
+            const error = await response.json();
+            showMessage('Ошибка: ' + JSON.stringify(error), 'danger');
+        }
+    } catch (error) {
+        showMessage('Ошибка при сохранении: ' + error.message, 'danger');
+    }
+}
+
+async function viewDiagram(id) {
+    try {
+        const response = await fetch(`/api/diagrams/${id}`, {
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const diagram = await response.json();
+            showDiagramModal(diagram);
+        } else {
+            showMessage('Ошибка загрузки диаграммы', 'danger');
+        }
+    } catch (error) {
+        showMessage('Ошибка: ' + error.message, 'danger');
+    }
+}
+
+function showDiagramModal(diagram) {
+    const modal = new bootstrap.Modal(document.getElementById('viewDiagramModal'));
+    document.getElementById('viewTitle').textContent = diagram.title;
+    document.getElementById('viewDescription').textContent = diagram.description || '';
+    document.getElementById('viewContent').innerHTML = `<pre class="mermaid">${escapeHtml(diagram.content)}</pre>`;
+    modal.show();
+
+    setTimeout(() => {
+        mermaid.run({
+            nodes: document.querySelectorAll('#viewContent .mermaid'),
+            suppressErrors: true
+        }).catch(err => console.error('Mermaid error:', err));
+    }, 100);
+}
+
+async function deleteDiagram(id) {
+    if (confirm('Вы уверены, что хотите удалить эту диаграмму?')) {
+        try {
+            const response = await fetch(`/api/diagrams/${id}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                loadDiagrams();
+                showMessage('Диаграмма удалена!', 'success');
+            } else {
+                showMessage('Ошибка при удалении', 'danger');
+            }
+        } catch (error) {
+            showMessage('Ошибка: ' + error.message, 'danger');
+        }
+    }
+}
+
+function resetDiagramForm() {
+    document.getElementById('diagramId').value = '';
+    document.getElementById('title').value = '';
+    document.getElementById('diagramType').value = 'mermaid';
+    document.getElementById('content').value = '';
+    document.getElementById('description').value = '';
+    document.getElementById('preview').innerHTML = '<p class="text-muted">Введите код диаграммы для предпросмотра</p>';
+    document.getElementById('modalTitle').textContent = 'Создать диаграмму';
+}
+
+function showMessage(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.minWidth = '300px';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alertDiv);
+    setTimeout(() => alertDiv.remove(), 3000);
+}
+
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ru-RU') + ' ' + date.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Загрузка диаграмм при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadDiagrams();
+});
+</script>
+{% endblock %}

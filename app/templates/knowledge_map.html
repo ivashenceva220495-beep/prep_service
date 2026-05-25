@@ -1,0 +1,776 @@
+{% extends "base.html" %}
+
+{% block title %}Карта знаний - PrepHub{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+<style>
+    .knowledge-wrapper {
+        display: flex;
+        gap: 24px;
+        min-height: 700px;
+    }
+    .graph-container {
+        flex: 2;
+        background: white;
+        border-radius: 16px;
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+        position: relative;
+    }
+    #cy {
+        width: 100%;
+        height: 600px;
+    }
+    .admin-panel {
+        flex: 1;
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    .admin-panel h3 {
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--border-color);
+    }
+    .node-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .node-item {
+        padding: 12px;
+        margin-bottom: 8px;
+        background: var(--light-bg);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .node-item:hover {
+        background: var(--border-color);
+        transform: translateX(4px);
+    }
+    .node-item.selected {
+        background: var(--primary-color);
+        color: white;
+    }
+    .node-title {
+        font-weight: 500;
+    }
+    .node-actions {
+        display: flex;
+        gap: 8px;
+    }
+    .node-actions button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+    .node-actions button:hover {
+        background: rgba(0,0,0,0.1);
+    }
+    .form-group {
+        margin-bottom: 16px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+        font-size: 13px;
+    }
+    .form-input, .form-textarea, .form-select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    .form-textarea {
+        resize: vertical;
+        min-height: 80px;
+    }
+    .btn-sm {
+        padding: 4px 12px;
+        font-size: 12px;
+    }
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+    .btn-warning {
+        background: #ffc107;
+        color: #333;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-secondary);
+    }
+    .difficulty-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 500;
+    }
+    .difficulty-beginner { background: #d4edda; color: #155724; }
+    .difficulty-intermediate { background: #fff3cd; color: #856404; }
+    .difficulty-advanced { background: #f8d7da; color: #721c24; }
+    .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 500;
+        margin-left: 8px;
+    }
+    .status-completed { background: #d4edda; color: #155724; }
+    .status-in_progress { background: #fff3cd; color: #856404; }
+    .status-not_started { background: #e9ecef; color: #6c757d; }
+    .progress-bar-container {
+        background: var(--border-color);
+        border-radius: 10px;
+        height: 6px;
+        overflow: hidden;
+        margin: 8px 0;
+    }
+    .progress-bar-fill {
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s;
+    }
+    .info-panel {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: var(--shadow-sm);
+    }
+    .category-filter {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .filter-btn {
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid var(--border-color);
+        background: white;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+    }
+    .filter-btn.active {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+    }
+    .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .tab {
+        padding: 8px 16px;
+        cursor: pointer;
+        background: none;
+        border: none;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+    .tab.active {
+        color: var(--primary-color);
+        border-bottom: 2px solid var(--primary-color);
+    }
+    .tab-content {
+        display: none;
+    }
+    .tab-content.active {
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div>
+            <h1 style="font-size: 32px;">🗺️ Карта знаний</h1>
+            <p style="color: var(--text-secondary);">Управляйте темами и отслеживайте прогресс обучения</p>
+        </div>
+        <button class="btn btn-primary" onclick="openAddNodeModal()">
+            <i class="fas fa-plus"></i> Добавить тему
+        </button>
+    </div>
+
+    <div class="category-filter">
+        <button class="filter-btn active" data-category="all">Все</button>
+        <button class="filter-btn" data-category="python">Python</button>
+        <button class="filter-btn" data-category="algorithms">Алгоритмы</button>
+        <button class="filter-btn" data-category="databases">Базы данных</button>
+        <button class="filter-btn" data-category="web">Web разработка</button>
+        <button class="filter-btn" data-category="system-design">System Design</button>
+    </div>
+
+    <div class="knowledge-wrapper">
+        <div class="graph-container">
+            <div id="cy"></div>
+        </div>
+
+        <div class="admin-panel">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('nodes')">📋 Темы</button>
+                <button class="tab" onclick="switchTab('info')">ℹ️ Информация</button>
+                <button class="tab" onclick="switchTab('add')">➕ Добавить</button>
+            </div>
+
+            <!-- Вкладка со списком тем -->
+            <div id="nodesTab" class="tab-content active">
+                <div class="node-list" id="nodesList">
+                    <div class="empty-state">Загрузка тем...</div>
+                </div>
+            </div>
+
+            <!-- Вкладка с информацией о выбранной теме -->
+            <div id="infoTab" class="tab-content">
+                <div id="noNodeSelected" style="text-align: center; color: var(--text-secondary); padding: 40px 0;">
+                    <i class="fas fa-info-circle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                    <p>Выберите тему на графе или в списке</p>
+                </div>
+                <div id="nodeInfoPanel" style="display: none;">
+                    <div class="info-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <h3 id="infoTitle" style="margin-bottom: 8px;"></h3>
+                            <div>
+                                <button class="btn btn-warning btn-sm" onclick="editCurrentNode()">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteCurrentNode()">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <span id="infoDifficulty" class="difficulty-badge"></span>
+                            <span id="infoStatus" class="status-badge"></span>
+                        </div>
+                        <p id="infoContent" style="margin-top: 12px; line-height: 1.6;"></p>
+                        <div>
+                            <strong>📚 Прогресс</strong>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" id="infoProgressFill"></div>
+                            </div>
+                            <p id="infoProgressText" style="font-size: 12px;"></p>
+                        </div>
+                        <div id="infoConnections" style="margin-top: 12px;"></div>
+                        <div style="display: flex; gap: 8px; margin-top: 16px;">
+                            <button class="btn btn-sm" style="background: #ffc107;" onclick="updateCurrentProgress('in_progress', 30)">
+                                <i class="fas fa-play"></i> В процессе
+                            </button>
+                            <button class="btn btn-sm btn-success" onclick="updateCurrentProgress('completed', 100)">
+                                <i class="fas fa-check"></i> Изучено
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка добавления новой темы -->
+            <div id="addTab" class="tab-content">
+                <div class="info-panel">
+                    <h3>➕ Добавить новую тему</h3>
+                    <form id="addNodeForm">
+                        <div class="form-group">
+                            <label>Название *</label>
+                            <input type="text" id="newTitle" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Категория *</label>
+                            <select id="newCategory" class="form-select">
+                                <option value="python">Python</option>
+                                <option value="algorithms">Алгоритмы</option>
+                                <option value="databases">Базы данных</option>
+                                <option value="web">Web разработка</option>
+                                <option value="system-design">System Design</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Сложность *</label>
+                            <select id="newDifficulty" class="form-select">
+                                <option value="beginner">Начальный</option>
+                                <option value="intermediate">Средний</option>
+                                <option value="advanced">Продвинутый</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Описание *</label>
+                            <textarea id="newContent" class="form-textarea" rows="4" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Связанные темы (родители)</label>
+                            <select id="newParents" class="form-select" multiple size="3">
+                                <option value="">-- Выберите темы --</option>
+                            </select>
+                            <small style="color: var(--text-secondary);">CTRL+Click для выбора нескольких</small>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="addNode()" style="width: 100%;">
+                            <i class="fas fa-save"></i> Создать тему
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования -->
+<div id="editModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3>✏️ Редактировать тему</h3>
+            <button onclick="closeEditModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editNodeId">
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" id="editTitle" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Категория</label>
+                <select id="editCategory" class="form-select">
+                    <option value="python">Python</option>
+                    <option value="algorithms">Алгоритмы</option>
+                    <option value="databases">Базы данных</option>
+                    <option value="web">Web разработка</option>
+                    <option value="system-design">System Design</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Сложность</label>
+                <select id="editDifficulty" class="form-select">
+                    <option value="beginner">Начальный</option>
+                    <option value="intermediate">Средний</option>
+                    <option value="advanced">Продвинутый</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Описание</label>
+                <textarea id="editContent" class="form-textarea" rows="5"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Родительские темы</label>
+                <select id="editParents" class="form-select" multiple size="3"></select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+            <button class="btn btn-primary" onclick="updateNode()">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let cy = null;
+    let currentCategory = 'all';
+    let allNodes = [];
+    let allEdges = [];
+    let userProgress = {};
+    let currentNodeId = null;
+
+    function getToken() {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; access_token=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+
+    async function apiCall(url, options = {}) {
+        const token = getToken();
+        const headers = { 'Content-Type': 'application/json', ...options.headers };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const response = await fetch(url, { ...options, headers });
+        if (response.status === 401) { window.location.href = '/login'; return null; }
+        return response;
+    }
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+        if (tabName === 'nodes') {
+            document.querySelector('.tab:first-child').classList.add('active');
+            document.getElementById('nodesTab').classList.add('active');
+        } else if (tabName === 'info') {
+            document.querySelectorAll('.tab')[1].classList.add('active');
+            document.getElementById('infoTab').classList.add('active');
+        } else if (tabName === 'add') {
+            document.querySelectorAll('.tab')[2].classList.add('active');
+            document.getElementById('addTab').classList.add('active');
+            loadParentsForSelect();
+        }
+    }
+
+    async function loadKnowledgeMap() {
+        let url = '/api/knowledge/map';
+        if (currentCategory !== 'all') {
+            url += `?category=${currentCategory}`;
+        }
+
+        const response = await apiCall(url);
+        if (response && response.ok) {
+            const data = await response.json();
+            allNodes = data.nodes || [];
+            allEdges = data.edges || [];
+            userProgress = data.user_progress || {};
+
+            renderGraph();
+            renderNodesList();
+        }
+    }
+
+    function renderGraph() {
+        const elements = [];
+
+        allNodes.forEach(node => {
+            const progress = userProgress[node.id] || { status: 'not_started', mastery_level: 0 };
+
+            let color = '#6c757d';
+            if (progress.status === 'completed') color = '#28a745';
+            else if (progress.status === 'in_progress') color = '#ffc107';
+            else if (progress.status === 'mastered') color = '#1a73e8';
+
+            elements.push({
+                data: {
+                    id: node.id.toString(),
+                    label: node.title,
+                    category: node.category,
+                    difficulty: node.difficulty,
+                    content: node.content,
+                    status: progress.status,
+                    mastery_level: progress.mastery_level
+                },
+                style: {
+                    'background-color': color,
+                    'label': node.title.length > 18 ? node.title.substring(0, 15) + '...' : node.title,
+                    'width': 70,
+                    'height': 70,
+                    'font-size': 10,
+                    'text-valign': 'bottom',
+                    'text-halign': 'center'
+                }
+            });
+        });
+
+        allEdges.forEach(edge => {
+            elements.push({
+                data: {
+                    id: `${edge.source}-${edge.target}`,
+                    source: edge.source.toString(),
+                    target: edge.target.toString()
+                }
+            });
+        });
+
+        if (cy) cy.destroy();
+
+        cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: elements,
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'background-color': 'data(background-color)',
+                        'label': 'data(label)',
+                        'text-valign': 'bottom',
+                        'text-halign': 'center',
+                        'font-size': '10px',
+                        'width': 'mapData(mastery_level, 0, 100, 50, 80)',
+                        'height': 'mapData(mastery_level, 0, 100, 50, 80)'
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#ccc',
+                        'target-arrow-color': '#ccc',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier'
+                    }
+                },
+                {
+                    selector: 'node:selected',
+                    style: {
+                        'border-width': 3,
+                        'border-color': '#007bff'
+                    }
+                }
+            ],
+            layout: {
+                name: 'cose',
+                idealEdgeLength: 100,
+                nodeOverlap: 20,
+                fit: true,
+                padding: 30,
+                randomize: false
+            }
+        });
+
+        cy.on('tap', 'node', function(evt) {
+            const node = evt.target;
+            const nodeData = node.data();
+            selectNode(parseInt(nodeData.id));
+        });
+    }
+
+    function renderNodesList() {
+        const container = document.getElementById('nodesList');
+
+        if (allNodes.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-map"></i><p>Нет тем. Добавьте первую!</p></div>';
+            return;
+        }
+
+        container.innerHTML = allNodes.map(node => {
+            const progress = userProgress[node.id] || { status: 'not_started' };
+            let statusIcon = '';
+            if (progress.status === 'completed') statusIcon = '✅';
+            else if (progress.status === 'in_progress') statusIcon = '⏳';
+            else statusIcon = '📘';
+
+            return `
+                <div class="node-item" onclick="selectNode(${node.id})">
+                    <div>
+                        <span class="node-title">${statusIcon} ${escapeHtml(node.title)}</span>
+                        <span class="difficulty-badge difficulty-${node.difficulty}" style="font-size: 10px; margin-left: 8px;">
+                            ${node.difficulty === 'beginner' ? 'Начальный' : (node.difficulty === 'intermediate' ? 'Средний' : 'Продвинутый')}
+                        </span>
+                    </div>
+                    <div class="node-actions">
+                        <button onclick="event.stopPropagation(); editNode(${node.id})" title="Редактировать">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="event.stopPropagation(); deleteNode(${node.id})" title="Удалить">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function selectNode(nodeId) {
+        currentNodeId = nodeId;
+        const node = allNodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        const progress = userProgress[nodeId] || { status: 'not_started', mastery_level: 0 };
+
+        let statusText = '';
+        switch(progress.status) {
+            case 'not_started': statusText = 'Не начато'; break;
+            case 'in_progress': statusText = 'В процессе'; break;
+            case 'completed': statusText = 'Изучено'; break;
+            default: statusText = 'Не начато';
+        }
+
+        let difficultyText = node.difficulty === 'beginner' ? 'Начальный' : (node.difficulty === 'intermediate' ? 'Средний' : 'Продвинутый');
+
+        // Находим связи
+        const parents = allNodes.filter(n =>
+            allEdges.some(e => e.target == nodeId && e.source == n.id)
+        );
+        const children = allNodes.filter(n =>
+            allEdges.some(e => e.source == nodeId && e.target == n.id)
+        );
+
+        let connectionsHtml = '';
+        if (parents.length) {
+            connectionsHtml += `<strong>📚 Требует знания:</strong><br>${parents.map(p => `• ${escapeHtml(p.title)}`).join('<br>')}<br><br>`;
+        }
+        if (children.length) {
+            connectionsHtml += `<strong>🎯 Открывает путь к:</strong><br>${children.map(c => `• ${escapeHtml(c.title)}`).join('<br>')}`;
+        }
+
+        document.getElementById('noNodeSelected').style.display = 'none';
+        document.getElementById('nodeInfoPanel').style.display = 'block';
+        document.getElementById('infoTitle').textContent = node.title;
+        document.getElementById('infoDifficulty').textContent = difficultyText;
+        document.getElementById('infoDifficulty').className = `difficulty-badge difficulty-${node.difficulty}`;
+        document.getElementById('infoStatus').textContent = statusText;
+        document.getElementById('infoStatus').className = `status-badge status-${progress.status}`;
+        document.getElementById('infoContent').textContent = node.content;
+        document.getElementById('infoProgressFill').style.width = `${progress.mastery_level}%`;
+        document.getElementById('infoProgressText').textContent = `Освоено на ${progress.mastery_level}%`;
+        document.getElementById('infoConnections').innerHTML = connectionsHtml;
+
+        // Подсветка выбранного узла в списке
+        document.querySelectorAll('.node-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+        const selectedItem = document.querySelector(`.node-item:has(.node-title:contains('${escapeHtml(node.title)}'))`);
+        if (selectedItem) selectedItem.classList.add('selected');
+
+        switchTab('info');
+    }
+
+    async function addNode() {
+        const title = document.getElementById('newTitle').value.trim();
+        const category = document.getElementById('newCategory').value;
+        const difficulty = document.getElementById('newDifficulty').value;
+        const content = document.getElementById('newContent').value.trim();
+        const parentIds = Array.from(document.getElementById('newParents').selectedOptions)
+            .map(opt => parseInt(opt.value)).filter(v => !isNaN(v));
+
+        if (!title || !content) {
+            showError('Заполните название и описание');
+            return;
+        }
+
+        const response = await apiCall('/api/knowledge/nodes', {
+            method: 'POST',
+            body: JSON.stringify({
+                title, content, category, difficulty, parent_ids: parentIds
+            })
+        });
+
+        if (response && response.ok) {
+            showSuccess('Тема добавлена!');
+            document.getElementById('newTitle').value = '';
+            document.getElementById('newContent').value = '';
+            await loadKnowledgeMap();
+            await loadParentsForSelect();
+        }
+    }
+
+    async function editNode(nodeId) {
+        const node = allNodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        document.getElementById('editNodeId').value = node.id;
+        document.getElementById('editTitle').value = node.title;
+        document.getElementById('editCategory').value = node.category;
+        document.getElementById('editDifficulty').value = node.difficulty;
+        document.getElementById('editContent').value = node.content;
+
+        // Загружаем родительские темы
+        const parentIds = allEdges.filter(e => e.target === nodeId).map(e => e.source);
+        const select = document.getElementById('editParents');
+        select.innerHTML = allNodes.filter(n => n.id !== nodeId).map(n => `
+            <option value="${n.id}" ${parentIds.includes(n.id) ? 'selected' : ''}>${escapeHtml(n.title)}</option>
+        `).join('');
+
+        document.getElementById('editModal').classList.add('active');
+    }
+
+    async function updateNode() {
+        const id = parseInt(document.getElementById('editNodeId').value);
+        const title = document.getElementById('editTitle').value.trim();
+        const category = document.getElementById('editCategory').value;
+        const difficulty = document.getElementById('editDifficulty').value;
+        const content = document.getElementById('editContent').value.trim();
+        const parentIds = Array.from(document.getElementById('editParents').selectedOptions)
+            .map(opt => parseInt(opt.value));
+
+        const response = await apiCall(`/api/knowledge/nodes/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ title, content, category, difficulty, parent_ids: parentIds })
+        });
+
+        if (response && response.ok) {
+            showSuccess('Тема обновлена!');
+            closeEditModal();
+            await loadKnowledgeMap();
+        }
+    }
+
+    async function deleteNode(nodeId) {
+        if (!confirm('Удалить эту тему? Все связи также будут удалены.')) return;
+
+        const response = await apiCall(`/api/knowledge/nodes/${nodeId}`, { method: 'DELETE' });
+        if (response && response.ok) {
+            showSuccess('Тема удалена');
+            await loadKnowledgeMap();
+            if (currentNodeId === nodeId) {
+                document.getElementById('nodeInfoPanel').style.display = 'none';
+                document.getElementById('noNodeSelected').style.display = 'block';
+            }
+        }
+    }
+
+    function editCurrentNode() {
+        if (currentNodeId) editNode(currentNodeId);
+    }
+
+    function deleteCurrentNode() {
+        if (currentNodeId) deleteNode(currentNodeId);
+    }
+
+    async function updateCurrentProgress(status, masteryLevel) {
+        if (!currentNodeId) return;
+
+        const response = await apiCall('/api/knowledge/progress', {
+            method: 'POST',
+            body: JSON.stringify({
+                node_id: currentNodeId,
+                status: status,
+                mastery_level: masteryLevel
+            })
+        });
+
+        if (response && response.ok) {
+            showSuccess('Прогресс обновлен!');
+            await loadKnowledgeMap();
+            selectNode(currentNodeId);
+        }
+    }
+
+    async function loadParentsForSelect() {
+        const response = await apiCall('/api/knowledge/nodes');
+        if (response && response.ok) {
+            const nodes = await response.json();
+            const select = document.getElementById('newParents');
+            select.innerHTML = nodes.map(n => `<option value="${n.id}">${escapeHtml(n.title)}</option>`).join('');
+        }
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('active');
+    }
+
+    // Фильтрация
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentCategory = btn.dataset.category;
+            await loadKnowledgeMap();
+        });
+    });
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadKnowledgeMap();
+        loadParentsForSelect();
+    });
+</script>
+{% endblock %}

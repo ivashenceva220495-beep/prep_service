@@ -1,0 +1,476 @@
+{% extends "base.html" %}
+
+{% block title %}Сниппеты кода{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+<style>
+    .snippet-card {
+        transition: transform 0.2s;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .snippet-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .file-badge {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        z-index: 1;
+    }
+    pre {
+        background: #1e1e1e;
+        padding: 15px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 0;
+        max-height: 300px;
+    }
+    pre code {
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .modal-body pre {
+        max-height: 500px;
+    }
+    .code-preview {
+        font-family: 'Fira Code', 'Courier New', monospace;
+        font-size: 13px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-code"></i> Сниппеты кода</h1>
+    <div>
+        <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#codeModal" onclick="resetCodeForm()">
+            <i class="fas fa-plus"></i> Добавить код
+        </button>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#fileModal" onclick="resetFileForm()">
+            <i class="fas fa-upload"></i> Загрузить файл
+        </button>
+    </div>
+</div>
+
+<div class="btn-group mb-4" role="group">
+    <button class="btn btn-outline-secondary" onclick="filterSnippets('all')">Все</button>
+    <button class="btn btn-outline-secondary" onclick="filterSnippets('text')">Текст</button>
+    <button class="btn btn-outline-secondary" onclick="filterSnippets('file')">Файлы</button>
+</div>
+
+<div id="snippetsList" class="row">
+    <div class="col-12 text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+    </div>
+</div>
+
+<!-- Modal для создания текстового кода -->
+<div class="modal fade" id="codeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить сниппет кода</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="mb-3">
+                        <label class="form-label">Название *</label>
+                        <input type="text" class="form-control" id="codeTitle" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Язык *</label>
+                        <select class="form-select" id="codeLanguage">
+                            <option value="python">Python</option>
+                            <option value="javascript">JavaScript</option>
+                            <option value="typescript">TypeScript</option>
+                            <option value="java">Java</option>
+                            <option value="kotlin">Kotlin</option>
+                            <option value="sql">SQL</option>
+                            <option value="json">JSON</option>
+                            <option value="yaml">YAML</option>
+                            <option value="html">HTML</option>
+                            <option value="css">CSS</option>
+                            <option value="bash">Bash</option>
+                            <option value="go">Go</option>
+                            <option value="rust">Rust</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Код *</label>
+                        <textarea class="form-control font-monospace" id="codeContent" rows="10" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" id="codeDescription" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Привязать к статье (ID)</label>
+                        <input type="number" class="form-control" id="codeArticleId" placeholder="Оставьте пустым">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveCodeSnippet()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal для загрузки файла -->
+<div class="modal fade" id="fileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Загрузить файл</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Файл *</label>
+                        <input type="file" class="form-control" id="fileInput" accept=".py,.js,.ts,.java,.sql,.json,.yaml,.txt,.md,.html,.css">
+                        <small class="text-muted">Поддерживаются: .py, .js, .ts, .java, .sql, .json, .yaml, .txt, .md, .html, .css</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Название (опционально)</label>
+                        <input type="text" class="form-control" id="fileTitle" placeholder="Оставьте пустым для использования имени файла">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Язык (опционально)</label>
+                        <select class="form-select" id="fileLanguage">
+                            <option value="">Авто-определение</option>
+                            <option value="python">Python</option>
+                            <option value="javascript">JavaScript</option>
+                            <option value="typescript">TypeScript</option>
+                            <option value="java">Java</option>
+                            <option value="sql">SQL</option>
+                            <option value="json">JSON</option>
+                            <option value="yaml">YAML</option>
+                            <option value="html">HTML</option>
+                            <option value="css">CSS</option>
+                            <option value="bash">Bash</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" id="fileDescription" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Привязать к статье (ID)</label>
+                        <input type="number" class="form-control" id="fileArticleId" placeholder="Оставьте пустым">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-success" onclick="uploadFile()">Загрузить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal для просмотра кода -->
+<div class="modal fade" id="viewCodeModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewCodeTitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Язык:</strong> <span id="viewCodeLanguage" class="badge bg-secondary"></span></p>
+                <p id="viewCodeDescription" class="text-muted"></p>
+                <hr>
+                <pre><code id="viewCodeContent" class="code-preview"></code></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFilter = 'all';
+
+async function loadSnippets() {
+    const url = currentFilter === 'all' ? '/api/code-snippets/' : `/api/code-snippets/?file_type=${currentFilter}`;
+
+    try {
+        const response = await fetch(url, { credentials: 'include' });
+        if (response.ok) {
+            const snippets = await response.json();
+            displaySnippets(snippets);
+        } else if (response.status === 401) {
+            window.location.href = '/login';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('snippetsList').innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-danger">Ошибка загрузки: ${error.message}</div>
+            </div>
+        `;
+    }
+}
+
+function displaySnippets(snippets) {
+    const container = document.getElementById('snippetsList');
+
+    if (!snippets || snippets.length === 0) {
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> Нет сниппетов. Добавьте первый!
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = snippets.map(snippet => `
+        <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card snippet-card h-100">
+                <div class="card-body">
+                    ${snippet.is_file ? `
+                        <div class="file-badge">
+                            <span class="badge bg-success"><i class="fas fa-file"></i> Файл</span>
+                        </div>
+                    ` : ''}
+                    <h5 class="card-title">${escapeHtml(snippet.title)}</h5>
+                    <p class="text-muted small">
+                        <i class="fas fa-tag"></i> ${escapeHtml(snippet.language)}
+                        ${snippet.file_size ? ` • <i class="fas fa-database"></i> ${formatFileSize(snippet.file_size)}` : ''}
+                    </p>
+                    ${snippet.is_file ? `
+                        <div class="text-center my-3">
+                            <i class="fas fa-file-code fa-3x text-secondary"></i>
+                            <p class="small mt-2">${escapeHtml(snippet.filename || snippet.title)}</p>
+                        </div>
+                    ` : `
+                        <pre><code class="language-${snippet.language}">${escapeHtml(snippet.code.substring(0, 200))}${snippet.code.length > 200 ? '...' : ''}</code></pre>
+                    `}
+                    ${snippet.description ? `<p class="small text-muted mt-2">${escapeHtml(snippet.description)}</p>` : ''}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="btn-group w-100">
+                        ${snippet.is_file ? `
+                            <a href="/api/code-snippets/${snippet.id}/download" class="btn btn-sm btn-success">
+                                <i class="fas fa-download"></i> Скачать
+                            </a>
+                        ` : `
+                            <button class="btn btn-sm btn-info" onclick="viewCodeModal(${snippet.id})">
+                                <i class="fas fa-eye"></i> Просмотр
+                            </button>
+                        `}
+                        <button class="btn btn-sm btn-warning" onclick="editSnippet(${snippet.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSnippet(${snippet.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    Prism.highlightAll();
+}
+
+// Просмотр кода в модальном окне
+async function viewCodeModal(id) {
+    try {
+        const response = await fetch(`/api/code-snippets/${id}`, { credentials: 'include' });
+        if (response.ok) {
+            const snippet = await response.json();
+
+            document.getElementById('viewCodeTitle').textContent = snippet.title;
+            document.getElementById('viewCodeLanguage').textContent = snippet.language;
+            document.getElementById('viewCodeDescription').textContent = snippet.description || 'Нет описания';
+
+            const codeContent = document.getElementById('viewCodeContent');
+            codeContent.textContent = snippet.code || '// Код не доступен';
+            codeContent.className = `language-${snippet.language} code-preview`;
+
+            const modal = new bootstrap.Modal(document.getElementById('viewCodeModal'));
+            modal.show();
+
+            // Подсветка синтаксиса после отображения
+            setTimeout(() => {
+                Prism.highlightElement(codeContent);
+            }, 100);
+        } else {
+            alert('Ошибка загрузки кода');
+        }
+    } catch (error) {
+        console.error('Error viewing code:', error);
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+async function saveCodeSnippet() {
+    const title = document.getElementById('codeTitle').value;
+    const language = document.getElementById('codeLanguage').value;
+    const code = document.getElementById('codeContent').value;
+    const description = document.getElementById('codeDescription').value;
+    const article_id = document.getElementById('codeArticleId').value;
+
+    if (!title || !code) {
+        alert('Заполните название и код');
+        return;
+    }
+
+    const data = {
+        title: title,
+        language: language,
+        code: code,
+        description: description,
+        article_id: article_id ? parseInt(article_id) : null
+    };
+
+    try {
+        const response = await fetch('/api/code-snippets/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('codeModal')).hide();
+            resetCodeForm();
+            loadSnippets();
+            alert('Сниппет сохранён!');
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + JSON.stringify(error));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+async function uploadFile() {
+    const file = document.getElementById('fileInput').files[0];
+    if (!file) {
+        alert('Выберите файл');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', document.getElementById('fileTitle').value);
+    formData.append('language', document.getElementById('fileLanguage').value);
+    formData.append('description', document.getElementById('fileDescription').value);
+
+    const article_id = document.getElementById('fileArticleId').value;
+    if (article_id) {
+        formData.append('article_id', parseInt(article_id));
+    }
+
+    try {
+        const response = await fetch('/api/code-snippets/upload-file', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('fileModal')).hide();
+            resetFileForm();
+            loadSnippets();
+            alert('Файл загружен!');
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.detail || 'Не удалось загрузить файл'));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+async function editSnippet(id) {
+    try {
+        const response = await fetch(`/api/code-snippets/${id}`, { credentials: 'include' });
+        if (response.ok) {
+            const snippet = await response.json();
+
+            if (snippet.is_file) {
+                alert('Файлы нельзя редактировать. Удалите и загрузите заново.');
+                return;
+            }
+
+            document.getElementById('codeTitle').value = snippet.title;
+            document.getElementById('codeLanguage').value = snippet.language;
+            document.getElementById('codeContent').value = snippet.code || '';
+            document.getElementById('codeDescription').value = snippet.description || '';
+            document.getElementById('codeArticleId').value = snippet.article_id || '';
+
+            document.getElementById('codeModal').setAttribute('data-edit-id', id);
+            new bootstrap.Modal(document.getElementById('codeModal')).show();
+        }
+    } catch (error) {
+        alert('Ошибка загрузки для редактирования');
+    }
+}
+
+async function deleteSnippet(id) {
+    if (confirm('Удалить сниппет?')) {
+        const response = await fetch(`/api/code-snippets/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (response.ok) {
+            loadSnippets();
+            alert('Сниппет удалён');
+        } else {
+            alert('Ошибка удаления');
+        }
+    }
+}
+
+function filterSnippets(type) {
+    currentFilter = type;
+    loadSnippets();
+}
+
+function resetCodeForm() {
+    document.getElementById('codeTitle').value = '';
+    document.getElementById('codeLanguage').value = 'python';
+    document.getElementById('codeContent').value = '';
+    document.getElementById('codeDescription').value = '';
+    document.getElementById('codeArticleId').value = '';
+    delete document.getElementById('codeModal').dataset.editId;
+}
+
+function resetFileForm() {
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileTitle').value = '';
+    document.getElementById('fileLanguage').value = '';
+    document.getElementById('fileDescription').value = '';
+    document.getElementById('fileArticleId').value = '';
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+loadSnippets();
+</script>
+{% endblock %}
