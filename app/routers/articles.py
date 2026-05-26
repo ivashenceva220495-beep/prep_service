@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from app.database import get_db
 from app.models.article import Article
 from app.models.code_snippet import CodeSnippet
@@ -13,14 +13,10 @@ router = APIRouter(prefix="/api/articles", tags=["articles"])
 
 
 def get_user_id_from_session(request: Request):
-    """Получение ID пользователя из сессии"""
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_id = user.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid user data")
-    return user_id
+    return user.get("sub")
 
 
 @router.post("/", response_model=ArticleResponse)
@@ -29,13 +25,13 @@ async def create_article(
         request: Request,
         db: AsyncSession = Depends(get_db)
 ):
-    """Создание новой статьи"""
     user_id = get_user_id_from_session(request)
 
     db_article = Article(
         title=article.title,
         content=article.content,
-        tags=article.tags,
+        tags=article.tags or "",
+        section=article.section or "general",
         user_id=user_id
     )
     db.add(db_article)
@@ -47,19 +43,63 @@ async def create_article(
 @router.get("/", response_model=List[ArticleResponse])
 async def get_articles(
         request: Request,
+        section: Optional[str] = Query(None, description="Фильтр по разделу"),
         skip: int = 0,
         limit: int = 100,
         db: AsyncSession = Depends(get_db)
 ):
-    """Получение списка всех статей пользователя"""
     user_id = get_user_id_from_session(request)
 
     query = select(Article).where(Article.user_id == user_id)
+
+    if section:
+        query = query.where(Article.section == section)
+
     query = query.offset(skip).limit(limit).order_by(Article.created_at.desc())
 
     result = await db.execute(query)
     articles = result.scalars().all()
     return articles
+
+
+@router.get("/sections")
+async def get_sections(
+        request: Request,
+        db: AsyncSession = Depends(get_db)
+):
+    """Получение списка всех разделов с количеством статей"""
+    user_id = get_user_id_from_session(request)
+
+    # Получаем все статьи пользователя с группировкой по разделам
+    result = await db.execute(
+        select(Article.section, func.count(Article.id).label('count'))
+        .where(Article.user_id == user_id)
+        .group_by(Article.section)
+    )
+    rows = result.all()
+
+    # Создаём словарь с количеством статей по разделам
+    sections_count = {row.section: row.count for row in rows if row.section}
+
+    # Список всех доступных разделов
+    all_sections = [
+        {"id": "general", "name": "Общие", "icon": "fas fa-file-alt", "count": sections_count.get("general", 0)},
+        {"id": "requirements", "name": "Требования", "icon": "fas fa-clipboard-list",
+         "count": sections_count.get("requirements", 0)},
+        {"id": "architecture", "name": "Архитектура", "icon": "fas fa-building",
+         "count": sections_count.get("architecture", 0)},
+        {"id": "databases", "name": "Базы данных", "icon": "fas fa-database",
+         "count": sections_count.get("databases", 0)},
+        {"id": "integration", "name": "Интеграции", "icon": "fas fa-link",
+         "count": sections_count.get("integration", 0)},
+        {"id": "security", "name": "Безопасность", "icon": "fas fa-shield-alt",
+         "count": sections_count.get("security", 0)},
+        {"id": "process", "name": "Процессы", "icon": "fas fa-chart-line", "count": sections_count.get("process", 0)},
+        {"id": "interview", "name": "Собеседование", "icon": "fas fa-users",
+         "count": sections_count.get("interview", 0)},
+    ]
+
+    return all_sections
 
 
 @router.get("/{article_id}")
@@ -68,10 +108,8 @@ async def get_article(
         request: Request,
         db: AsyncSession = Depends(get_db)
 ):
-    """Получение одной статьи со всеми связанными данными"""
     user_id = get_user_id_from_session(request)
 
-    # Получаем статью
     result = await db.execute(
         select(Article).where(
             Article.id == article_id,
@@ -83,24 +121,22 @@ async def get_article(
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    # Получаем связанные сниппеты кода
     snippets_result = await db.execute(
         select(CodeSnippet).where(CodeSnippet.article_id == article_id)
     )
     snippets = snippets_result.scalars().all()
 
-    # Получаем связанные диаграммы
     diagrams_result = await db.execute(
         select(Diagram).where(Diagram.article_id == article_id)
     )
     diagrams = diagrams_result.scalars().all()
 
-    # Формируем ответ с полными данными
     return {
         "id": article.id,
         "title": article.title,
         "content": article.content,
         "tags": article.tags,
+        "section": article.section,
         "user_id": article.user_id,
         "created_at": article.created_at,
         "updated_at": article.updated_at,
@@ -139,10 +175,8 @@ async def update_article(
         request: Request,
         db: AsyncSession = Depends(get_db)
 ):
-    """Обновление существующей статьи"""
     user_id = get_user_id_from_session(request)
 
-    # Находим статью
     result = await db.execute(
         select(Article).where(
             Article.id == article_id,
@@ -154,13 +188,14 @@ async def update_article(
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    # Обновляем только переданные поля
     if article_update.title is not None:
         article.title = article_update.title
     if article_update.content is not None:
         article.content = article_update.content
     if article_update.tags is not None:
         article.tags = article_update.tags
+    if article_update.section is not None:
+        article.section = article_update.section
 
     article.updated_at = datetime.utcnow()
 
@@ -175,10 +210,8 @@ async def delete_article(
         request: Request,
         db: AsyncSession = Depends(get_db)
 ):
-    """Удаление статьи (каскадно удаляются связанные сниппеты, диаграммы, изображения)"""
     user_id = get_user_id_from_session(request)
 
-    # Удаляем статью (связанные данные удалятся автоматически благодаря CASCADE)
     result = await db.execute(
         delete(Article).where(
             Article.id == article_id,

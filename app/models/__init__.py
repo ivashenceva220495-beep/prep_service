@@ -1,3 +1,4 @@
+# app/models/__init__.py
 from app.models.article import Article
 from app.models.code_snippet import CodeSnippet
 from app.models.diagram import Diagram

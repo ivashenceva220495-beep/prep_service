@@ -1,3 +1,4 @@
+# app/models/image.py
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -15,11 +16,8 @@ class Image(Base):
     file_size = Column(Integer, nullable=False)
     file_type = Column(String(100), nullable=False)
     user_id = Column(String(100), nullable=False, index=True)
-
-    # Связь со статьей (внешний ключ)
     article_id = Column(Integer, ForeignKey("articles.id", ondelete="CASCADE"), nullable=True)
-
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Обратная связь (позволяет получить изображения из статьи)
+    # Обратная связь со статьей
     article = relationship("Article", back_populates="images")

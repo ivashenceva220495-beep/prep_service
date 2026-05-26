@@ -61,6 +61,31 @@
         margin-right: 5px;
         margin-bottom: 5px;
     }
+    .section-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        margin-bottom: 8px;
+    }
+    .section-filter {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .section-filter.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+    }
+    .section-filter.active i {
+        color: white;
+    }
+    .section-count {
+        font-size: 11px;
+        opacity: 0.7;
+    }
     .attachment-item {
         display: inline-flex;
         align-items: center;
@@ -76,10 +101,8 @@
         margin-right: 6px;
         color: #667eea;
     }
-    .article-content {
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        line-height: 1.6;
+    .alert {
+        z-index: 9999;
     }
     pre {
         background: #1e1e1e;
@@ -97,11 +120,34 @@
         padding: 15px;
         border-radius: 8px;
         text-align: center;
+        min-height: 150px;
+    }
+    .diagram-preview svg {
+        max-width: 100%;
+        height: auto;
     }
     .card-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border-radius: 12px 12px 0 0 !important;
+    }
+    .snippet-card, .diagram-card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        overflow: hidden;
+    }
+    .snippet-header, .diagram-header {
+        background: #f8f9fa;
+        padding: 10px 15px;
+        border-bottom: 1px solid #dee2e6;
+        font-weight: bold;
+    }
+    .snippet-body {
+        padding: 0;
+    }
+    .diagram-container {
+        min-height: 200px;
     }
 </style>
 {% endblock %}
@@ -112,6 +158,21 @@
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#articleModal" onclick="resetArticleForm()">
         <i class="fas fa-plus"></i> Новая статья
     </button>
+</div>
+
+<!-- Фильтр по разделам -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0"><i class="fas fa-filter"></i> Фильтр по разделам</h6>
+            <button class="btn btn-sm btn-link" onclick="clearSectionFilter()">Сбросить</button>
+        </div>
+        <div id="sectionsFilter" class="d-flex flex-wrap gap-2">
+            <div class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div id="articlesList" class="row">
@@ -131,11 +192,24 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form>
+                <form id="articleForm">
                     <input type="hidden" id="editArticleId">
                     <div class="mb-3">
                         <label class="form-label">Заголовок *</label>
                         <input type="text" class="form-control" id="articleTitle" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Раздел</label>
+                        <select class="form-control" id="articleSection">
+                            <option value="general">📄 Общие</option>
+                            <option value="requirements">📋 Требования</option>
+                            <option value="architecture">🏗️ Архитектура</option>
+                            <option value="databases">🗄️ Базы данных</option>
+                            <option value="integration">🔗 Интеграции</option>
+                            <option value="security">🔒 Безопасность</option>
+                            <option value="process">🔄 Процессы</option>
+                            <option value="interview">🎯 Собеседование</option>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Содержание *</label>
@@ -168,12 +242,14 @@
                 <h5 class="modal-title" id="viewArticleTitle"></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                <div id="viewArticleSection" class="mb-2"></div>
                 <div id="viewArticleTags" class="mb-2"></div>
                 <hr>
                 <div id="viewArticleContent" class="article-content mb-4"></div>
                 <hr>
-                <div id="viewAttachments"></div>
+                <div id="viewSnippets"></div>
+                <div id="viewDiagrams"></div>
                 <h6 class="mt-3"><i class="fas fa-images"></i> Изображения:</h6>
                 <div id="viewImages" class="image-gallery mb-3"></div>
             </div>
@@ -202,14 +278,154 @@
     </div>
 </div>
 
+<!-- Modal для привязки сниппета или диаграммы -->
+<div class="modal fade" id="attachModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Привязать к статье</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="attachForm">
+                    <input type="hidden" id="attachArticleId">
+                    <div class="mb-3">
+                        <label class="form-label">Тип</label>
+                        <select class="form-control" id="attachType" onchange="loadAvailableItems()">
+                            <option value="code">💻 Код сниппет</option>
+                            <option value="diagram">📊 Диаграмма</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Выберите элемент</label>
+                        <select class="form-control" id="attachItemId">
+                            <option value="">Загрузка...</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="attachToArticle()">Привязать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 let currentViewArticleId = null;
+let currentSectionFilter = null;
 let selectedImageFiles = [];
+
+// Инициализация Mermaid
+function initMermaid() {
+    if (typeof mermaid !== 'undefined') {
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: true, htmlLabels: true },
+            sequence: { useMaxWidth: true, diagramMarginX: 50, diagramMarginY: 10 },
+            gantt: { useMaxWidth: true, titleTopMargin: 25, barHeight: 20, barGap: 4 },
+            journey: { useMaxWidth: true }
+        });
+    }
+}
+initMermaid();
+
+// Функция рендеринга диаграммы
+async function renderMermaid(content, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return false;
+
+    try {
+        container.innerHTML = '<div class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Рендеринг диаграммы...</div>';
+
+        const id = 'mermaid-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const wrapper = document.createElement('div');
+        wrapper.id = id;
+        wrapper.style.display = 'none';
+        document.body.appendChild(wrapper);
+
+        const pre = document.createElement('pre');
+        pre.className = 'mermaid';
+        pre.textContent = content;
+        wrapper.appendChild(pre);
+
+        await mermaid.run({
+            nodes: [pre],
+            suppressErrors: true
+        });
+
+        const svg = pre.querySelector('svg');
+        if (svg) {
+            container.innerHTML = '';
+            container.appendChild(svg.cloneNode(true));
+            document.body.removeChild(wrapper);
+            return true;
+        } else {
+            container.innerHTML = `<pre class="bg-light p-3 rounded">${escapeHtml(content)}</pre>`;
+            document.body.removeChild(wrapper);
+            return false;
+        }
+    } catch (err) {
+        console.error('Render error:', err);
+        container.innerHTML = `<div class="alert alert-warning">Ошибка рендеринга: ${err.message}</div>`;
+        return false;
+    }
+}
+
+// Загрузка разделов для фильтра
+async function loadSections() {
+    try {
+        const response = await fetch('/api/articles/sections', { credentials: 'include' });
+        if (response.ok) {
+            const sections = await response.json();
+            displaySectionsFilter(sections);
+        }
+    } catch (error) {
+        console.error('Error loading sections:', error);
+    }
+}
+
+function displaySectionsFilter(sections) {
+    const container = document.getElementById('sectionsFilter');
+    container.innerHTML = sections.map(section => `
+        <button class="btn btn-sm btn-outline-secondary section-filter" data-section="${section.id}" onclick="filterBySection('${section.id}')">
+            <i class="${section.icon}"></i> ${section.name}
+            <span class="section-count">(${section.count})</span>
+        </button>
+    `).join('');
+}
+
+function filterBySection(sectionId) {
+    currentSectionFilter = sectionId;
+    document.querySelectorAll('.section-filter').forEach(btn => {
+        if (btn.dataset.section === sectionId) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    loadArticles();
+}
+
+function clearSectionFilter() {
+    currentSectionFilter = null;
+    document.querySelectorAll('.section-filter').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    loadArticles();
+}
 
 // Загрузка статей
 async function loadArticles() {
     try {
-        const response = await fetch('/api/articles/', { credentials: 'include' });
+        let url = '/api/articles/';
+        if (currentSectionFilter) {
+            url += `?section=${currentSectionFilter}`;
+        }
+        const response = await fetch(url, { credentials: 'include' });
         if (response.ok) {
             const articles = await response.json();
             displayArticles(articles);
@@ -226,11 +442,42 @@ async function loadArticles() {
     }
 }
 
+const sectionIcons = {
+    'general': '📄',
+    'requirements': '📋',
+    'architecture': '🏗️',
+    'databases': '🗄️',
+    'integration': '🔗',
+    'security': '🔒',
+    'process': '🔄',
+    'interview': '🎯'
+};
+
+function getSectionName(sectionId) {
+    const names = {
+        'general': 'Общие',
+        'requirements': 'Требования',
+        'architecture': 'Архитектура',
+        'databases': 'Базы данных',
+        'integration': 'Интеграции',
+        'security': 'Безопасность',
+        'process': 'Процессы',
+        'interview': 'Собеседование'
+    };
+    return names[sectionId] || 'Общие';
+}
+
 function displayArticles(articles) {
     const container = document.getElementById('articlesList');
 
     if (!articles || articles.length === 0) {
-        container.innerHTML = '<div class="col-12"><div class="alert alert-info text-center">Нет статей. Создайте первую!</div></div>';
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> Нет статей. Создайте первую!
+                </div>
+            </div>
+        `;
         return;
     }
 
@@ -238,7 +485,10 @@ function displayArticles(articles) {
         <div class="col-md-6 col-lg-4 mb-3">
             <div class="card article-card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">${escapeHtml(article.title)}</h5>
+                    <div class="section-badge">
+                        ${sectionIcons[article.section] || '📄'} ${getSectionName(article.section)}
+                    </div>
+                    <h5 class="card-title mt-2">${escapeHtml(article.title)}</h5>
                     <div class="card-text small text-muted mb-2">
                         ${escapeHtml(article.content.substring(0, 120))}${article.content.length > 120 ? '...' : ''}
                     </div>
@@ -248,9 +498,12 @@ function displayArticles(articles) {
                     <div id="images-${article.id}" class="image-gallery"></div>
                 </div>
                 <div class="card-footer bg-transparent">
-                    <div class="btn-group w-100">
+                    <div class="btn-group w-100" role="group">
                         <button class="btn btn-sm btn-info" onclick="viewArticle(${article.id})">
                             <i class="fas fa-eye"></i> Просмотр
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="openAttachModal(${article.id})">
+                            <i class="fas fa-paperclip"></i> Привязать
                         </button>
                         <button class="btn btn-sm btn-warning" onclick="editArticle(${article.id})">
                             <i class="fas fa-edit"></i>
@@ -287,25 +540,325 @@ async function loadArticleThumbnails(articleId) {
     }
 }
 
-// Просмотр статьи с полным содержимым сниппетов и диаграмм
+// Сохранение статьи
+async function saveArticle() {
+    const id = document.getElementById('editArticleId').value;
+    const title = document.getElementById('articleTitle').value;
+    const content = document.getElementById('articleContent').value;
+    const tags = document.getElementById('articleTags').value;
+    const section = document.getElementById('articleSection')?.value || 'general';
+
+    if (!title || !content) {
+        alert('Заполните заголовок и содержание');
+        return;
+    }
+
+    const data = {
+        title: title,
+        content: content,
+        tags: tags,
+        section: section
+    };
+
+    const url = id ? `/api/articles/${id}` : '/api/articles/';
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            const article = await response.json();
+
+            if (selectedImageFiles && selectedImageFiles.length > 0) {
+                await uploadImages(article.id);
+            }
+
+            const modal = bootstrap.Modal.getInstance(document.getElementById('articleModal'));
+            if (modal) modal.hide();
+
+            resetArticleForm();
+            loadArticles();
+            showMessage('Статья сохранена!', 'success');
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + JSON.stringify(error));
+        }
+    } catch (error) {
+        console.error('Error saving article:', error);
+        alert('Ошибка сохранения: ' + error.message);
+    }
+}
+
+async function uploadImages(articleId) {
+    if (!selectedImageFiles || selectedImageFiles.length === 0) return;
+
+    for (const file of selectedImageFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('article_id', articleId);
+
+        try {
+            const response = await fetch('/api/images/upload', {
+                method: 'POST',
+                credentials: 'include',
+                body: formData
+            });
+            if (!response.ok) {
+                console.error('Failed to upload image:', file.name);
+            }
+        } catch (error) {
+            console.error('Error uploading image:', error);
+        }
+    }
+    selectedImageFiles = [];
+}
+
+function showMessage(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.minWidth = '300px';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alertDiv);
+    setTimeout(() => alertDiv.remove(), 3000);
+}
+
+// Привязка сниппетов и диаграмм
+async function openAttachModal(articleId) {
+    document.getElementById('attachArticleId').value = articleId;
+    await loadAvailableItems();
+    new bootstrap.Modal(document.getElementById('attachModal')).show();
+}
+
+async function loadAvailableItems() {
+    const type = document.getElementById('attachType').value;
+    const select = document.getElementById('attachItemId');
+
+    const url = type === 'code' ? '/api/code-snippets/' : '/api/diagrams/';
+
+    try {
+        const response = await fetch(url, { credentials: 'include' });
+        if (response.ok) {
+            const items = await response.json();
+            const unlinkedItems = items.filter(item => !item.article_id);
+
+            if (unlinkedItems.length === 0) {
+                select.innerHTML = '<option value="">Нет доступных элементов</option>';
+            } else {
+                select.innerHTML = '<option value="">Выберите...</option>' +
+                    unlinkedItems.map(item => `<option value="${item.id}">${escapeHtml(item.title)} (${item.language || item.diagram_type})</option>`).join('');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading items:', error);
+        select.innerHTML = '<option value="">Ошибка загрузки</option>';
+    }
+}
+
+async function attachToArticle() {
+    const articleId = document.getElementById('attachArticleId').value;
+    const type = document.getElementById('attachType').value;
+    const itemId = document.getElementById('attachItemId').value;
+
+    if (!itemId) {
+        alert('Выберите элемент для привязки');
+        return;
+    }
+
+    const url = type === 'code' ? `/api/code-snippets/${itemId}` : `/api/diagrams/${itemId}`;
+
+    try {
+        const getResponse = await fetch(url, { credentials: 'include' });
+        if (getResponse.ok) {
+            const item = await getResponse.json();
+            item.article_id = parseInt(articleId);
+
+            const updateResponse = await fetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(item)
+            });
+
+            if (updateResponse.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('attachModal')).hide();
+                showMessage('Элемент привязан к статье!', 'success');
+                loadArticles();
+            } else {
+                alert('Ошибка при привязке');
+            }
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+// Загрузка сниппетов для просмотра статьи
+async function loadArticleSnippets(articleId) {
+    try {
+        const response = await fetch(`/api/code-snippets/?article_id=${articleId}`, { credentials: 'include' });
+        if (response.ok) {
+            const snippets = await response.json();
+            const container = document.getElementById('viewSnippets');
+
+            if (snippets.length === 0) {
+                container.innerHTML = '<p class="text-muted">Нет прикреплённых сниппетов</p>';
+            } else {
+                container.innerHTML = `
+                    <h6><i class="fas fa-code"></i> Код сниппеты:</h6>
+                    ${snippets.map(snippet => `
+                        <div class="snippet-card">
+                            <div class="snippet-header">
+                                <i class="fas fa-code"></i> ${escapeHtml(snippet.title)}
+                                <span class="badge bg-secondary ms-2">${escapeHtml(snippet.language)}</span>
+                                ${snippet.is_file ? '<span class="badge bg-success ms-2"><i class="fas fa-file"></i> Файл</span>' : ''}
+                            </div>
+                            <div class="snippet-body">
+                                <pre><code class="language-${snippet.language}">${escapeHtml(snippet.is_file ? `// Файл: ${snippet.filename}\n// Размер: ${formatFileSize(snippet.file_size)}\n// Для просмотра полного содержимого скачайте файл` : (snippet.code || '// Код не доступен'))}</code></pre>
+                                ${snippet.is_file ? `<div class="p-2 text-center"><a href="/api/code-snippets/${snippet.id}/download" class="btn btn-sm btn-success"><i class="fas fa-download"></i> Скачать</a></div>` : ''}
+                                ${snippet.description ? `<div class="p-2 bg-light">${escapeHtml(snippet.description)}</div>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+            }
+            setTimeout(() => {
+                Prism.highlightAll();
+            }, 100);
+        }
+    } catch (error) {
+        console.error('Error loading snippets:', error);
+        document.getElementById('viewSnippets').innerHTML = '<p class="text-danger">Ошибка загрузки сниппетов</p>';
+    }
+}
+
+// Загрузка диаграмм для просмотра статьи
+async function loadArticleDiagrams(articleId) {
+    try {
+        const response = await fetch(`/api/diagrams/?article_id=${articleId}`, { credentials: 'include' });
+        if (response.ok) {
+            const diagrams = await response.json();
+            const container = document.getElementById('viewDiagrams');
+
+            if (diagrams.length === 0) {
+                container.innerHTML = '<p class="text-muted">Нет прикреплённых диаграмм</p>';
+            } else {
+                container.innerHTML = `
+                    <h6 class="mt-3"><i class="fas fa-project-diagram"></i> Диаграммы:</h6>
+                    ${diagrams.map(diagram => `
+                        <div class="diagram-card mb-3">
+                            <div class="diagram-header">
+                                <i class="fas fa-project-diagram"></i> ${escapeHtml(diagram.title)}
+                                <span class="badge bg-secondary ms-2">${escapeHtml(diagram.diagram_type)}</span>
+                            </div>
+                            <div class="card-body">
+                                <div id="article-diagram-${diagram.id}" class="diagram-preview">
+                                    <div class="text-center p-3">
+                                        <i class="fas fa-spinner fa-spin"></i> Загрузка диаграммы...
+                                    </div>
+                                </div>
+                                ${diagram.description ? `<div class="mt-2 text-muted small">${escapeHtml(diagram.description)}</div>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+
+                // Рендерим каждую диаграмму с правильной функцией
+                for (const diagram of diagrams) {
+                    const diagramContainer = document.getElementById(`article-diagram-${diagram.id}`);
+                    if (diagramContainer && diagram.content) {
+                        try {
+                            await renderMermaidInArticle(diagram.content, diagramContainer);
+                        } catch (err) {
+                            console.error('Error rendering diagram:', err);
+                            diagramContainer.innerHTML = `<pre class="bg-light p-2 rounded small">${escapeHtml(diagram.content)}</pre>`;
+                        }
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading diagrams:', error);
+        document.getElementById('viewDiagrams').innerHTML = '<p class="text-danger">Ошибка загрузки диаграмм</p>';
+    }
+}
+
+// Функция рендеринга диаграммы для статьи
+async function renderMermaidInArticle(content, container) {
+    if (!container) return;
+    if (!content || content.trim() === '') {
+        container.innerHTML = '<div class="text-muted">Нет содержимого для отображения</div>';
+        return;
+    }
+
+    try {
+        container.innerHTML = '<div class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Рендеринг диаграммы...</div>';
+
+        // Создаем временный контейнер для рендеринга
+        const tempId = 'temp-mermaid-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const wrapper = document.createElement('div');
+        wrapper.id = tempId;
+        wrapper.style.position = 'absolute';
+        wrapper.style.left = '-9999px';
+        wrapper.style.top = '-9999px';
+        document.body.appendChild(wrapper);
+
+        const pre = document.createElement('pre');
+        pre.className = 'mermaid';
+        pre.textContent = content;
+        wrapper.appendChild(pre);
+
+        // Рендерим
+        await mermaid.run({
+            nodes: [pre],
+            suppressErrors: true
+        });
+
+        const svg = pre.querySelector('svg');
+        if (svg) {
+            container.innerHTML = '';
+            const clonedSvg = svg.cloneNode(true);
+            clonedSvg.style.maxWidth = '100%';
+            clonedSvg.style.height = 'auto';
+            container.appendChild(clonedSvg);
+        } else {
+            container.innerHTML = `<pre class="bg-light p-2 rounded small"><code>${escapeHtml(content)}</code></pre>`;
+        }
+
+        document.body.removeChild(wrapper);
+    } catch (err) {
+        console.error('Render error:', err);
+        container.innerHTML = `<div class="alert alert-warning small">Ошибка рендеринга: ${err.message}</div>`;
+    }
+}
+
+// Просмотр статьи
 async function viewArticle(id) {
     currentViewArticleId = id;
     try {
-        const [articleRes, imagesRes, snippetsRes, diagramsRes] = await Promise.all([
+        const [articleRes, imagesRes] = await Promise.all([
             fetch(`/api/articles/${id}`, { credentials: 'include' }),
-            fetch(`/api/images/?article_id=${id}`, { credentials: 'include' }),
-            fetch(`/api/code-snippets/?article_id=${id}`, { credentials: 'include' }),
-            fetch(`/api/diagrams/?article_id=${id}`, { credentials: 'include' })
+            fetch(`/api/images/?article_id=${id}`, { credentials: 'include' })
         ]);
 
         if (articleRes.ok) {
             const article = await articleRes.json();
             document.getElementById('viewArticleTitle').textContent = article.title;
+            document.getElementById('viewArticleSection').innerHTML = `
+                <span class="section-badge">${sectionIcons[article.section] || '📄'} ${getSectionName(article.section)}</span>
+            `;
             document.getElementById('viewArticleTags').innerHTML = article.tags ?
                 article.tags.split(',').map(t => `<span class="tag">${escapeHtml(t.trim())}</span>`).join('') : '';
             document.getElementById('viewArticleContent').innerHTML = escapeHtml(article.content);
 
-            // Изображения
             if (imagesRes.ok) {
                 const images = await imagesRes.json();
                 const imagesContainer = document.getElementById('viewImages');
@@ -314,67 +867,10 @@ async function viewArticle(id) {
                 `).join('');
             }
 
-            // Сниппеты кода с полным содержимым
-            let snippetsHtml = '';
-            if (snippetsRes.ok) {
-                const snippets = await snippetsRes.json();
-                snippets.forEach(s => {
-                    const codeContent = s.is_file ? `// Файл: ${s.filename}\n// Размер: ${formatFileSize(s.file_size)}\n// Скачайте файл для просмотра полного содержимого` : (s.code || '// Код не доступен');
-                    snippetsHtml += `
-                        <div class="card mb-3">
-                            <div class="card-header bg-light">
-                                <strong><i class="fas fa-code"></i> ${escapeHtml(s.title)}</strong>
-                                <span class="badge bg-secondary ms-2">${escapeHtml(s.language)}</span>
-                                ${s.is_file ? `<span class="badge bg-success ms-2"><i class="fas fa-file"></i> Файл</span>` : ''}
-                            </div>
-                            <div class="card-body p-0">
-                                <pre><code class="language-${s.language}">${escapeHtml(codeContent)}</code></pre>
-                                ${s.is_file ? `<div class="p-2 text-center"><a href="/api/code-snippets/${s.id}/download" class="btn btn-sm btn-success"><i class="fas fa-download"></i> Скачать файл</a></div>` : ''}
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-
-            // Диаграммы с визуализацией
-            let diagramsHtml = '';
-            if (diagramsRes.ok) {
-                const diagrams = await diagramsRes.json();
-                diagrams.forEach(d => {
-                    diagramsHtml += `
-                        <div class="card mb-3">
-                            <div class="card-header bg-light">
-                                <strong><i class="fas fa-project-diagram"></i> ${escapeHtml(d.title)}</strong>
-                                <span class="badge bg-secondary ms-2">${escapeHtml(d.diagram_type)}</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="diagram-preview" id="diagram-${d.id}">${escapeHtml(d.content)}</div>
-                                ${d.description ? `<p class="small text-muted mt-2">${escapeHtml(d.description)}</p>` : ''}
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-
-            document.getElementById('viewAttachments').innerHTML = `
-                <h6><i class="fas fa-code"></i> Код сниппеты:</h6>
-                ${snippetsHtml || '<p class="text-muted">Нет прикреплённых сниппетов</p>'}
-                <h6 class="mt-3"><i class="fas fa-project-diagram"></i> Диаграммы:</h6>
-                ${diagramsHtml || '<p class="text-muted">Нет прикреплённых диаграмм</p>'}
-            `;
+            await loadArticleSnippets(id);
+            await loadArticleDiagrams(id);
 
             new bootstrap.Modal(document.getElementById('viewArticleModal')).show();
-
-            // Рендерим диаграммы и подсветку кода после отображения модального окна
-            setTimeout(() => {
-                if (typeof mermaid !== 'undefined') {
-                    mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });
-                    mermaid.contentLoaded();
-                }
-                if (typeof Prism !== 'undefined') {
-                    Prism.highlightAll();
-                }
-            }, 200);
         }
     } catch (error) {
         console.error('Error viewing article:', error);
@@ -390,11 +886,11 @@ async function editArticle(id) {
             const article = await response.json();
             document.getElementById('editArticleId').value = article.id;
             document.getElementById('articleTitle').value = article.title;
+            document.getElementById('articleSection').value = article.section || 'general';
             document.getElementById('articleContent').value = article.content;
             document.getElementById('articleTags').value = article.tags || '';
             document.getElementById('modalTitle').textContent = 'Редактировать статью';
 
-            // Загружаем существующие изображения
             const imagesRes = await fetch(`/api/images/?article_id=${id}`, { credentials: 'include' });
             if (imagesRes.ok) {
                 const images = await imagesRes.json();
@@ -420,7 +916,6 @@ function editFromView() {
     editArticle(currentViewArticleId);
 }
 
-// Удаление существующего изображения
 async function removeExistingImage(imageId, element) {
     if (confirm('Удалить изображение?')) {
         const response = await fetch(`/api/images/${imageId}`, { method: 'DELETE', credentials: 'include' });
@@ -432,79 +927,21 @@ async function removeExistingImage(imageId, element) {
     }
 }
 
-// Сохранение статьи
-async function saveArticle() {
-    const id = document.getElementById('editArticleId').value;
-    const title = document.getElementById('articleTitle').value;
-    const content = document.getElementById('articleContent').value;
-    const tags = document.getElementById('articleTags').value;
-
-    if (!title || !content) {
-        alert('Заполните заголовок и содержание');
-        return;
-    }
-
-    const data = { title, content, tags };
-    const url = id ? `/api/articles/${id}` : '/api/articles/';
-    const method = id ? 'PUT' : 'POST';
-
-    try {
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (response.ok) {
-            const article = await response.json();
-
-            // Загружаем новые изображения
-            if (selectedImageFiles && selectedImageFiles.length > 0) {
-                for (const file of selectedImageFiles) {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('article_id', article.id);
-                    await fetch('/api/images/upload', {
-                        method: 'POST',
-                        credentials: 'include',
-                        body: formData
-                    });
-                }
-            }
-
-            const modal = bootstrap.Modal.getInstance(document.getElementById('articleModal'));
-            if (modal) modal.hide();
-
-            resetArticleForm();
-            loadArticles();
-            alert('Статья сохранена!');
-        } else {
-            const error = await response.json();
-            alert('Ошибка: ' + JSON.stringify(error));
-        }
-    } catch (error) {
-        console.error('Error saving article:', error);
-        alert('Ошибка сохранения: ' + error.message);
-    }
-}
-
-// Удаление статьи
 async function deleteArticle(id) {
     if (confirm('Удалить статью? Все связанные данные также будут удалены.')) {
         const response = await fetch(`/api/articles/${id}`, { method: 'DELETE', credentials: 'include' });
         if (response.ok) {
             loadArticles();
+            showMessage('Статья удалена!', 'success');
         } else {
             alert('Ошибка удаления');
         }
     }
 }
 
-// Предпросмотр новых изображений
+// Предпросмотр изображений
 document.getElementById('articleImages')?.addEventListener('change', function(e) {
     const previewContainer = document.getElementById('imagePreviewContainer');
-    // Не очищаем существующие, добавляем новые
     selectedImageFiles = Array.from(e.target.files);
 
     selectedImageFiles.forEach((file, index) => {
@@ -530,6 +967,7 @@ function showFullImage(url) {
 function resetArticleForm() {
     document.getElementById('editArticleId').value = '';
     document.getElementById('articleTitle').value = '';
+    document.getElementById('articleSection').value = 'general';
     document.getElementById('articleContent').value = '';
     document.getElementById('articleTags').value = '';
     document.getElementById('articleImages').value = '';
@@ -553,7 +991,10 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Загрузка статей при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => loadArticles());
+// Инициализация
+document.addEventListener('DOMContentLoaded', () => {
+    loadSections();
+    loadArticles();
+});
 </script>
 {% endblock %}

@@ -3,11 +3,12 @@ from typing import Optional, List
 from datetime import datetime
 
 
-# ========== Article Schemas ==========
+# Article schemas
 class ArticleBase(BaseModel):
     title: str
     content: str
     tags: Optional[str] = ""
+    section: Optional[str] = "general"
 
 
 class ArticleCreate(ArticleBase):
@@ -16,8 +17,10 @@ class ArticleCreate(ArticleBase):
 
 class ArticleUpdate(BaseModel):
     title: Optional[str] = None
-    content: Optional[str] = None
+    content: Optional[str]
+    None
     tags: Optional[str] = None
+    section: Optional[str] = None
 
 
 class ArticleResponse(ArticleBase):
@@ -29,8 +32,7 @@ class ArticleResponse(ArticleBase):
     class Config:
         from_attributes = True
 
-
-# ========== Code Snippet Schemas ==========
+#Code Snippet Schemas
 class CodeSnippetBase(BaseModel):
     title: str
     language: str
@@ -54,7 +56,7 @@ class CodeSnippetUpdate(BaseModel):
 class CodeSnippetResponse(CodeSnippetBase):
     id: int
     user_id: str
-    code: Optional[str] = None  
+    code: Optional[str] = None
     filename: Optional[str] = None
     file_size: Optional[int] = None
     file_type: Optional[str] = None
@@ -66,7 +68,7 @@ class CodeSnippetResponse(CodeSnippetBase):
         from_attributes = True
 
 
-# ========== File Upload Response ==========
+#File Upload Response
 class FileUploadResponse(BaseModel):
     snippet_id: int
     filename: str
@@ -74,7 +76,7 @@ class FileUploadResponse(BaseModel):
     message: str
 
 
-# ========== Diagram Schemas ==========
+#Diagram Schemas
 class DiagramBase(BaseModel):
     title: str
     diagram_type: str
@@ -105,7 +107,7 @@ class DiagramResponse(DiagramBase):
         from_attributes = True
 
 
-# ========== Image Schemas ==========
+#Image Schemas
 class ImageBase(BaseModel):
     filename: str
     title: Optional[str] = None
@@ -129,7 +131,7 @@ class ImageResponse(ImageBase):
         from_attributes = True
 
 
-# ========== AI Tutor Schemas ==========
+#AI Tutor Schemas
 class QuestionRequest(BaseModel):
     topic: str
     difficulty: str = "middle"
@@ -157,7 +159,7 @@ class SessionResponse(BaseModel):
     difficulty: str
 
 
-# ========== User Schemas ==========
+#User Schemas
 class UserInfo(BaseModel):
     sub: str
     email: str
